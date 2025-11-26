@@ -1,0 +1,19 @@
+[package]
+name = "pinentry-wayland-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+assuan = { path = "vendor/assuan-rs/assuan" }
+pinentry = { path = "vendor/assuan-rs/pinentry" }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+smithay-client-toolkit = "0.20"
+calloop = "0.14.3"
+memmap2 = "0.9"
+rustix = { version = "1.1.2", features = ["mm"] }
+thiserror = "2.0"
+log = "0.4"
+env_logger = "0.11"
+swash = "0.2"
