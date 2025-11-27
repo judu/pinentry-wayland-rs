@@ -686,7 +686,11 @@ impl KeyboardHandler for PinEntryWindow {
         } else if keysym == Keysym::Escape {
             *self.result.lock().unwrap() = Some(Err("User cancelled".to_string()));
         } else if keysym == Keysym::BackSpace {
-            self.pin_input.pop();
+            if ctrl_pressed {
+                self.pin_input.clear();
+            } else {
+                self.pin_input.pop();
+            }
             self.draw(qh);
         } else if ctrl_pressed && (keysym == Keysym::v || keysym == Keysym::V) {
             // Trigger paste from clipboard
