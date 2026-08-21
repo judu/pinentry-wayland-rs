@@ -12,7 +12,7 @@
 
 use std::time::Instant;
 
-use smithay_client_toolkit::compositor::{CompositorState, Region};
+use smithay_client_toolkit::compositor::{CompositorState, FrameCallbackData, Region};
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::{
     Anchor, KeyboardInteractivity, Layer, LayerShell, LayerSurface,
@@ -179,7 +179,7 @@ impl Surface {
         // Both buffers still in the compositor's hands: skip this frame rather
         // than tearing, and ask to be woken again.
         let Some(index) = buffers.iter().position(|b| b.canvas(pool).is_some()) else {
-            surface.frame(qh, surface.clone());
+            surface.frame(qh, FrameCallbackData(surface.clone()));
             *frame_pending = true;
             layer.commit();
             return;
@@ -197,7 +197,7 @@ impl Surface {
             }
         }
 
-        surface.frame(qh, surface.clone());
+        surface.frame(qh, FrameCallbackData(surface.clone()));
         *frame_pending = true;
 
         if let Err(e) = buffers[index].attach_to(surface) {

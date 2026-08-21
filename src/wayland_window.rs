@@ -6,9 +6,7 @@ use smithay_client_toolkit::{
         data_source::DataSourceHandler,
         DataDeviceManagerState, WritePipe,
     },
-    delegate_compositor, delegate_data_device, delegate_keyboard, delegate_layer, delegate_output,
-    delegate_pointer, delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell,
-    delegate_xdg_window,
+    delegate_dispatch2, delegate_registry,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -945,16 +943,7 @@ impl DataOfferHandler for PinEntryWindow {
     }
 }
 
-delegate_compositor!(PinEntryWindow);
-delegate_output!(PinEntryWindow);
-delegate_shm!(PinEntryWindow);
-delegate_seat!(PinEntryWindow);
-delegate_keyboard!(PinEntryWindow);
-delegate_pointer!(PinEntryWindow);
-delegate_xdg_shell!(PinEntryWindow);
-delegate_xdg_window!(PinEntryWindow);
-delegate_layer!(PinEntryWindow);
-delegate_data_device!(PinEntryWindow);
+delegate_dispatch2!(PinEntryWindow);
 delegate_registry!(PinEntryWindow);
 
 impl ProvidesRegistryState for PinEntryWindow {
