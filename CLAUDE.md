@@ -25,6 +25,13 @@ This is a Wayland-native pinentry implementation written in Rust. It provides a 
 - Spawns a separate thread for Wayland event handling to avoid blocking the Assuan protocol
 - Uses Arc<Mutex<>> for thread-safe result sharing between Wayland and main threads
 
+**src/ring.rs**
+- Pulsing blue-green border around every output while the dialog is up (ported from `../dbus-pulse-niri`)
+- One `wlr-layer-shell` overlay surface per output, click-through, no keyboard interactivity
+- Only the edge strip is painted/damaged; each surface has its own zeroed pool with two slots
+- Silently disabled when the compositor lacks `zwlr_layer_shell_v1`
+- `PinEntryWindow` forwards layer-shell, output and frame-callback events to `Ring`
+
 **src/wayland_window.rs**
 - Complete Wayland window implementation using smithay-client-toolkit
 - Handles all Wayland protocol interactions (compositor, seat, keyboard, pointer, data device for clipboard)
@@ -61,6 +68,7 @@ The project does custom software rendering:
 
 Uses smithay-client-toolkit for protocol handling:
 - xdg-shell for window management
+- wlr-layer-shell for the ring overlay
 - wl_seat/wl_keyboard for input
 - wl_data_device for clipboard access
 - wl_shm for shared memory buffers

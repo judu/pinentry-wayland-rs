@@ -1,3 +1,4 @@
+mod ring;
 mod wayland_window;
 
 use wayland_window::PinEntryWindow;

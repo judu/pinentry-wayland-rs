@@ -6,8 +6,9 @@ use smithay_client_toolkit::{
         data_source::DataSourceHandler,
         DataDeviceManagerState, WritePipe,
     },
-    delegate_compositor, delegate_data_device, delegate_keyboard, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell, delegate_xdg_window,
+    delegate_compositor, delegate_data_device, delegate_keyboard, delegate_layer, delegate_output,
+    delegate_pointer, delegate_registry, delegate_seat, delegate_shm, delegate_xdg_shell,
+    delegate_xdg_window,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -17,6 +18,7 @@ use smithay_client_toolkit::{
         Capability, SeatHandler, SeatState,
     },
     shell::{
+        wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
         xdg::{
             window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
             XdgShell,
@@ -32,6 +34,7 @@ use wayland_client::{
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface},
     Connection, EventQueue, QueueHandle,
 };
+use crate::ring::Ring;
 use swash::{
     FontRef,
     shape::ShapeContext,
@@ -68,6 +71,7 @@ pub struct PinEntryWindow {
     shm_state: Shm,
     xdg_shell_state: XdgShell,
     data_device_manager_state: DataDeviceManagerState,
+    ring: Ring,
 
     window: Option<Window>,
     pool: Option<SlotPool>,
@@ -106,6 +110,9 @@ impl PinEntryWindow {
         let xdg_shell_state = XdgShell::bind(&globals, &qh).expect("xdg_shell not available");
         let data_device_manager_state = DataDeviceManagerState::bind(&globals, &qh)
             .expect("wl_data_device_manager not available");
+        let layer_shell = LayerShell::bind(&globals, &qh)
+            .inspect_err(|e| log::warn!("zwlr_layer_shell_v1 unavailable, no ring: {e}"))
+            .ok();
 
         let font_data = load_system_font();
 
@@ -117,6 +124,7 @@ impl PinEntryWindow {
             shm_state,
             xdg_shell_state,
             data_device_manager_state,
+            ring: Ring::new(layer_shell),
             window: None,
             pool: None,
             data_device: None,
@@ -155,11 +163,20 @@ impl PinEntryWindow {
 
         self.window = Some(window);
 
+        for output in self.output_state.outputs().collect::<Vec<_>>() {
+            self.light_output(qh, output);
+        }
+
         let pool = SlotPool::new(
             (self.width * self.height * 4) as usize,
             &self.shm_state,
         ).expect("Failed to create pool");
         self.pool = Some(pool);
+    }
+
+    fn light_output(&mut self, qh: &QueueHandle<Self>, output: wl_output::WlOutput) {
+        let scale = self.output_state.info(&output).map(|i| i.scale_factor).unwrap_or(1);
+        self.ring.add_output(qh, &self.compositor_state, output, scale);
     }
 
     pub fn draw(&mut self, _qh: &QueueHandle<Self>) {
@@ -504,10 +521,11 @@ impl CompositorHandler for PinEntryWindow {
     fn scale_factor_changed(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
-        _new_factor: i32,
+        qh: &QueueHandle<Self>,
+        surface: &wl_surface::WlSurface,
+        new_factor: i32,
     ) {
+        self.ring.scale_factor_changed(&self.shm_state, qh, surface, new_factor);
     }
 
     fn transform_changed(
@@ -523,10 +541,14 @@ impl CompositorHandler for PinEntryWindow {
         &mut self,
         _conn: &Connection,
         qh: &QueueHandle<Self>,
-        _surface: &wl_surface::WlSurface,
+        surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
-        self.draw(qh);
+        if self.ring.owns(surface) {
+            self.ring.frame(&self.shm_state, qh, surface);
+        } else {
+            self.draw(qh);
+        }
     }
 
     fn surface_enter(
@@ -556,9 +578,13 @@ impl OutputHandler for PinEntryWindow {
     fn new_output(
         &mut self,
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        qh: &QueueHandle<Self>,
+        output: wl_output::WlOutput,
     ) {
+        // Hot-plug while the dialog is up: light the new output too.
+        if self.window.is_some() {
+            self.light_output(qh, output);
+        }
     }
 
     fn update_output(
@@ -573,8 +599,26 @@ impl OutputHandler for PinEntryWindow {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
+        output: wl_output::WlOutput,
     ) {
+        self.ring.remove_output(&output);
+    }
+}
+
+impl LayerShellHandler for PinEntryWindow {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        self.ring.closed(layer);
+    }
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        layer: &LayerSurface,
+        configure: LayerSurfaceConfigure,
+        _serial: u32,
+    ) {
+        self.ring.configure(&self.shm_state, qh, layer, configure.new_size);
     }
 }
 
@@ -909,6 +953,7 @@ delegate_keyboard!(PinEntryWindow);
 delegate_pointer!(PinEntryWindow);
 delegate_xdg_shell!(PinEntryWindow);
 delegate_xdg_window!(PinEntryWindow);
+delegate_layer!(PinEntryWindow);
 delegate_data_device!(PinEntryWindow);
 delegate_registry!(PinEntryWindow);
 
